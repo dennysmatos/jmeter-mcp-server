@@ -31,12 +31,24 @@ export function executionDir(executionId: string): string {
   return ensureDir(path.join(executionsDir(), executionId));
 }
 
+export function capacitySearchesDir(): string {
+  return ensureDir(path.join(WORKSPACE_DIR, "capacity-searches"));
+}
+
+export function capacitySearchDir(searchId: string): string {
+  return ensureDir(path.join(capacitySearchesDir(), searchId));
+}
+
 export function newPlanId(): string {
   return genId("plan");
 }
 
 export function newExecutionId(): string {
   return genId("exec");
+}
+
+export function newCapacitySearchId(): string {
+  return genId("search");
 }
 
 export function planExists(planId: string): boolean {

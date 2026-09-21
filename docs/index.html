@@ -603,7 +603,7 @@
           <span data-lang="en">View on GitHub</span><span data-lang="pt">Ver no GitHub</span>
         </a>
         <a class="btn ghost" href="#tools">
-          <span data-lang="en">Browse the 52 tools</span><span data-lang="pt">Ver as 52 ferramentas</span>
+          <span data-lang="en">Browse the 55 tools</span><span data-lang="pt">Ver as 55 ferramentas</span>
         </a>
         <a class="btn ghost" href="#prompts">
           <span data-lang="en">See example prompts</span><span data-lang="pt">Ver exemplos de prompt</span>
@@ -797,7 +797,7 @@
         That's the whole case for this server in one story: an LLM regenerating XML from memory re-risks
         that exact mistake on every single request. This server encodes the correct shape <strong>once</strong>,
         in a serializer (and a matching parser for the reverse direction) checked against real JMeter
-        source and bundled examples, exercised by 166 automated tests including real JMeter runs — and
+        source and bundled examples, exercised by 212 automated tests including real JMeter runs — and
         exposes it as typed tools instead.
       </p>
       <p data-lang="pt">
@@ -805,7 +805,7 @@
         de memória arrisca repetir exatamente esse erro a cada requisição. Este servidor codifica o
         formato correto <strong>uma única vez</strong>, em um serializador (e um parser correspondente
         para o sentido inverso) verificado contra o código-fonte real do JMeter e exemplos reais, coberto
-        por 166 testes automatizados incluindo execuções reais do JMeter — e expõe isso como ferramentas
+        por 212 testes automatizados incluindo execuções reais do JMeter — e expõe isso como ferramentas
         tipadas.
       </p>
 
@@ -1110,8 +1110,8 @@
       <h2 data-lang="pt">Todas as ferramentas</h2>
 
       <div class="tool-count">
-        <span data-lang="en"><b>52</b> typed MCP tools</span>
-        <span data-lang="pt"><b>52</b> ferramentas MCP tipadas</span>
+        <span data-lang="en"><b>55</b> typed MCP tools</span>
+        <span data-lang="pt"><b>55</b> ferramentas MCP tipadas</span>
       </div>
       <p class="lead-p" data-lang="en">
         Grouped the same way JMeter's own right-click <strong>Add</strong> menu groups elements — if you
@@ -1270,6 +1270,16 @@
           </ul>
         </div>
 
+        <div class="tool-group">
+          <div class="cat" data-lang="en">Capacity Search</div>
+          <div class="cat" data-lang="pt">Busca de Capacidade</div>
+          <ul>
+            <li><code>find_breaking_point</code><span class="desc" data-lang="en">Run the plan over and over, driving thread count, to find where it stops meeting its SLA; returns searchId immediately</span><span class="desc" data-lang="pt">Roda o plano repetidas vezes, ajustando a quantidade de threads, para achar onde ele deixa de cumprir o SLA; retorna searchId na hora</span></li>
+            <li><code>get_breaking_point_status</code><span class="desc" data-lang="en">Every round run so far with its load and metrics, plus the final breaking point</span><span class="desc" data-lang="pt">Todas as rodadas já executadas com sua carga e métricas, mais o ponto de ruptura final</span></li>
+            <li><code>stop_breaking_point_search</code><span class="desc" data-lang="en">Abort a running search, keeping the bounds it already established</span><span class="desc" data-lang="pt">Aborta uma busca em andamento, mantendo os limites já estabelecidos</span></li>
+          </ul>
+        </div>
+
       </div>
     </div>
   </section>
@@ -1396,13 +1406,6 @@
           </thead>
           <tbody>
             <tr>
-              <td class="tool-name"><code>find_breaking_point</code></td>
-              <td data-lang="en">Automatic binary-search capacity finder: ramps thread count up/down on its own, run after run, until it finds the concurrency level that violates your SLA (p95 latency, error %).</td>
-              <td data-lang="pt">Localizador automático de capacidade por busca binária: ajusta a quantidade de threads para cima/baixo sozinho, execução após execução, até achar o nível de concorrência que viola o seu SLA (latência p95, % de erro).</td>
-              <td data-lang="en">JMeter has no native "find the limit" feature. Driving this search through raw LLM tool calls costs ~6-8 calls per round across the several rounds a binary search needs.</td>
-              <td data-lang="pt">O JMeter não tem um recurso nativo de "achar o limite". Conduzir essa busca via chamadas de ferramenta cruas custaria de 6 a 8 chamadas por rodada, em várias rodadas de busca binária.</td>
-            </tr>
-            <tr>
               <td class="tool-name"><code>detect_bottleneck_class</code></td>
               <td data-lang="en">Fits Little's Law / the Universal Scalability Law to collected concurrency vs. throughput vs. latency data, and classifies the bottleneck as contention, coherency, or saturation.</td>
               <td data-lang="pt">Ajusta a Lei de Little / a Universal Scalability Law aos dados coletados de concorrência vs. throughput vs. latência, e classifica o gargalo como contenção, coerência ou saturação.</td>
@@ -1458,12 +1461,12 @@
       <h2 data-lang="en">What's deliberately not covered yet</h2>
       <h2 data-lang="pt">O que ainda falta cobrir, de propósito</h2>
       <p class="lead-p" data-lang="en">
-        JMeter is a huge tool. This server targets the 52-tool core of real, everyday HTTP-first load
+        JMeter is a huge tool. This server targets the 55-tool core of real, everyday HTTP-first load
         testing — samplers, controllers, config, timers, extractors, assertions, and reporting listeners
         that get used constantly. Plenty of JMeter is intentionally left out for now.
       </p>
       <p class="lead-p" data-lang="pt">
-        O JMeter é uma ferramenta enorme. Este servidor cobre o núcleo de 52 ferramentas do teste de carga
+        O JMeter é uma ferramenta enorme. Este servidor cobre o núcleo de 55 ferramentas do teste de carga
         real do dia a dia, focado em HTTP — samplers, controllers, config, timers, extractors, assertions
         e listeners de relatório que são usados o tempo todo. Boa parte do JMeter fica de fora de
         propósito, por enquanto.
@@ -1618,7 +1621,7 @@
               <td class="mark-yes">✓</td>
               <td class="mark-yes">✓</td>
               <td class="mark-yes">✓</td>
-              <td class="mark-yes" data-lang="en">166, incl. real runs</td><td class="mark-yes" data-lang="pt">166, incl. execuções reais</td>
+              <td class="mark-yes" data-lang="en">212, incl. real runs</td><td class="mark-yes" data-lang="pt">212, incl. execuções reais</td>
               <td class="mark-yes">✓</td>
             </tr>
             <tr>

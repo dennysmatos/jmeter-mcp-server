@@ -42,7 +42,7 @@ export function readMeta(executionId: string): ExecutionMeta {
   return JSON.parse(readFileSync(file, "utf-8")) as ExecutionMeta;
 }
 
-function hasNodeOfType(root: TestNode, type: TestNode["type"]): boolean {
+export function hasNodeOfType(root: TestNode, type: TestNode["type"]): boolean {
   if (root.type === type) return true;
   return root.children.some((child) => hasNodeOfType(child, type));
 }

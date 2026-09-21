@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { registerCapacityTools } from "./tools/capacityTools.js";
 import { registerExecutionTools } from "./tools/executionTools.js";
 import { registerPlanTools } from "./tools/planTools.js";
 
@@ -11,6 +12,7 @@ const server = new McpServer({
 
 registerPlanTools(server);
 registerExecutionTools(server);
+registerCapacityTools(server);
 
 async function main() {
   const transport = new StdioServerTransport();

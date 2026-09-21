@@ -180,6 +180,70 @@ already know where to look:
 | `stop_execution` | Send `SIGTERM` to a running JMeter process |
 | `get_execution_report` | Aggregated stats (per label + overall) parsed from the run's JTL output |
 
+**Capacity search** (async — the search runs many real test executions in the background):
+
+| Tool | Purpose |
+|---|---|
+| `find_breaking_point` | Find the concurrency level where a plan stops meeting its SLA, by running it over and over and driving one thread group's thread count; returns `{ searchId }` immediately |
+| `get_breaking_point_status` | `running` / `completed` / `failed` / `stopped`, every round run so far with its load and metrics, and the final breaking point |
+| `stop_breaking_point_search` | Abort a running search, keeping the bounds it had already established |
+
+### Finding the breaking point
+
+`find_breaking_point` answers the question JMeter itself has no feature for: *how
+many concurrent users can this survive?* Instead of you adjusting the thread
+count, re-running, reading the report and deciding again — roughly six to eight
+tool calls per round, across the six to eight rounds a search needs — the server
+runs the whole search itself and you poll one tool for the answer.
+
+It works in two phases:
+
+1. **Bracketing** — starts at `startThreads` and doubles the load (50 → 100 →
+   200 …) while the SLA holds, until a round breaks it or the `maxThreads`
+   ceiling is reached.
+2. **Binary search** — bisects between the last healthy level and the first
+   broken one until the two are within `toleranceThreads` of each other, or
+   `maxIterations` rounds have run, whichever comes first.
+
+```
+find_breaking_point (planId, threadGroupNodeId, maxThreads: 400, p95Ms: 800, errorPct: 1)
+                                → { searchId }
+get_breaking_point_status (searchId)   ← poll
+                                → { breakingPoint: 137, lastHealthy: 134,
+                                    stopReason: "converged", iterations: [...] }
+```
+
+A round passes when **every** threshold set (`p95Ms`, `errorPct`) is met by the
+overall `TOTAL` row; at least one threshold is required. Each round puts the
+thread group into scheduler mode — a ramp-up proportional to the thread count
+(`rampSecondsPerThread`) followed by a fixed `plateauDurationSeconds` at full
+load — and **only the plateau samples count**, so the ramp-up doesn't drag the
+numbers of a healthy round down. Loop counts are deliberately not used: they
+would make rounds at different thread counts incomparable.
+
+The search temporarily overwrites `numThreads`, `rampTimeSeconds`,
+`durationSeconds` and `loops` on the thread group you point it at, and restores
+the original values when it ends — including when it fails or is stopped. The
+status reports this as `propsRestored`, and the original values are kept in the
+search's `meta.json` in case the process dies mid-search. The plan needs an
+Aggregate Report, Summary Report, or View Results Tree listener, or there would
+be no metrics to judge the SLA against.
+
+| Parameter | Default | Purpose |
+|---|---|---|
+| `maxThreads` | *(required)* | Safety ceiling — the search never runs more threads than this |
+| `p95Ms` / `errorPct` | *(at least one required)* | SLA thresholds a round is judged against |
+| `startThreads` | `50` | Load for the first round |
+| `toleranceThreads` | 2% of `maxThreads`, min 5 | How close the bounds must get before the search stops bisecting |
+| `rampSecondsPerThread` | `0.1` | Ramp-up seconds per thread, so every round adds load at the same rate |
+| `plateauDurationSeconds` | `60` | Seconds at full load; only these samples count toward the SLA |
+| `cooldownSeconds` | `5` | Pause between rounds so the system under test recovers |
+| `maxIterations` | `8` | Hard cap on rounds, so a slow search still ends |
+
+A search that never breaks the SLA reports `breakingPoint: null` with
+`stopReason: "ceiling-reached"` — raise `maxThreads` and go again. One where
+even the first round breaks reports `lastHealthy: null`; lower `startThreads`.
+
 ## Example workflow
 
 ```
@@ -195,16 +259,18 @@ get_execution_report            (executionId) → aggregated latency/error stats
 
 ## Testing
 
-166 automated tests, no framework beyond Node's built-in test runner:
+212 automated tests, no framework beyond Node's built-in test runner:
 
 ```bash
-npm test               # 155 tests: tree-mutation and XML-shape unit tests, XML -> tree parsing,
-                        # serialize -> parse round-trips, and every tool called over the real MCP
-                        # protocol (stdio, the same way Claude Code/Desktop talk to it) - no
-                        # JMeter install needed, fully hermetic
-npm run test:integration  # 11 tests: real JMeter runs - the If Controller story above, While
-                        # Controller loop counts, timer pacing, extractors, assertions, etc.
-                        # (needs JMETER_HOME)
+npm test               # 196 tests: tree-mutation and XML-shape unit tests, XML -> tree parsing,
+                        # serialize -> parse round-trips, the breaking-point search algorithm
+                        # driven round-by-round against a simulated system, and every tool called
+                        # over the real MCP protocol (stdio, the same way Claude Code/Desktop talk
+                        # to it) - no JMeter install needed, fully hermetic
+npm run test:integration  # 16 tests: real JMeter runs - the If Controller story above, While
+                        # Controller loop counts, timer pacing, extractors, assertions, and a full
+                        # find_breaking_point search converging on the real concurrency limit of a
+                        # live service (needs JMETER_HOME)
 npm run test:all
 ```
 
@@ -306,7 +372,15 @@ block above rather than relying on it already being "set on your machine".
     summary-report.jtl               # output of the Summary Report listener, if present
     jmeter.log
     meta.json                        # execution status, pid, timestamps, exit code
+  capacity-searches/<searchId>/
+    meta.json                        # find_breaking_point search: config, SLA, every round run,
+                                     # current bounds, and the thread group's original settings
 ```
+
+A `find_breaking_point` search doesn't get its own execution directory — each of
+its rounds is a normal execution under `executions/`, and the search's
+`meta.json` records the `executionId` of every round, so any individual round can
+still be inspected with `get_execution_report`.
 
 ## Editing and importing plans
 
@@ -372,7 +446,6 @@ Ideas being explored for future releases — none of these are implemented yet:
 
 | Proposed tool | What it does | Why it's worth it |
 | --- | --- | --- |
-| `find_breaking_point` | Automatic binary-search capacity finder: ramps thread count up/down on its own, run after run, until it finds the concurrency level that violates your SLA (p95 latency, error %) | JMeter has no native "find the limit" feature. Driving this search through raw LLM tool calls costs ~6-8 calls per round (adjust load, run, poll, read report, decide) across the several rounds a binary search needs |
 | `detect_bottleneck_class` | Fits Little's Law / the Universal Scalability Law to collected concurrency vs. throughput vs. latency data, and classifies the bottleneck as contention, coherency, or saturation | JMeter only outputs raw numbers; re-deriving a queueing-theory curve fit through prose reasoning would mean reimplementing nonlinear regression by hand for every question |
 | `detect_soak_drift` | Runs linear regression over the latency/error time series of a long-duration soak test to separate normal noise from a real trend (the classic memory-leak signal) | JMeter's graph shows the curve, but doesn't say whether it's a statistically real degradation or just noise |
 | `compare_execution_reports` | Statistical diff across N executions (not just two), with a significance test for whether a p95 shift is real or noise | A ready-made performance regression gate for CI, instead of someone eyeballing two JSON reports and guessing |
@@ -389,7 +462,7 @@ internals.
 
 | Server | Approach | `.jmx` round-trip | Edit by id | Async run | Tests | Real JMeter |
 | --- | --- | --- | --- | --- | --- | --- |
-| **jmeter-mcp-server** (this project) | JSON tree, 34 element types, authored and edited by node id | ✓ | ✓ | ✓ | 166, incl. real runs | ✓ |
+| **jmeter-mcp-server** (this project) | JSON tree, 34 element types, authored and edited by node id | ✓ | ✓ | ✓ | 212, incl. real runs | ✓ |
 | [QAInsights/jmeter-mcp-server](https://github.com/QAInsights/jmeter-mcp-server) | Runs an existing `.jmx` and analyzes results — doesn't author plans | — | ✗ | ✗ | ✗ | ✓ |
 | [aravindksk7/Jmeter-MCP](https://github.com/aravindksk7/Jmeter-MCP) | Generates a `.jmx` from parameters; no re-import of existing plans | ✗ | ✗ | ✗ | ✗ | ✓ |
 | [chandanvars/jmeter-mcp-server](https://github.com/chandanvars/jmeter-mcp-server) | Generates a whole plan from one JSON payload, runs it via Docker | ✗ | ✗ | ✗ | ✗ | ✓ |
