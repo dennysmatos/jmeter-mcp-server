@@ -35,32 +35,73 @@ export function parseGroovyVersion(libFileNames: string[]): string | null {
   return null;
 }
 
-function javaCommand(env: NodeJS.ProcessEnv): string {
-  const javaHome = env.JAVA_HOME;
+/** Windows users commonly set JAVA_HOME with surrounding quotes, and a trailing separator is common everywhere. */
+export function cleanEnvPath(value: string | undefined): string | undefined {
+  const trimmed = value?.trim().replace(/^"(.*)"$/, "$1").trim();
+  return trimmed ? trimmed : undefined;
+}
+
+export interface DetectDeps {
+  platform: NodeJS.Platform;
+  exists(file: string): boolean;
+  readDir(dir: string): string[];
+  /** Runs `<command> -version` and returns everything it printed (Java writes the version to stderr). */
+  runJavaVersion(command: string): string;
+}
+
+const realDeps: DetectDeps = {
+  platform: process.platform,
+  exists: existsSync,
+  readDir: (dir) => readdirSync(dir),
+  runJavaVersion(command) {
+    const result = spawnSync(command, ["-version"], { encoding: "utf-8", timeout: 10_000, windowsHide: true });
+    return `${result.stderr ?? ""}${result.stdout ?? ""}`;
+  },
+};
+
+/** Paths are built with the target platform's rules, so a Windows layout is right even when checked elsewhere. */
+function pathFor(platform: NodeJS.Platform): typeof path.posix {
+  return platform === "win32" ? path.win32 : path.posix;
+}
+
+/**
+ * The java the JMeter launcher will use: jmeter.bat and bin/jmeter both prefer JAVA_HOME/bin/java
+ * and otherwise fall back to whatever `java` is on PATH.
+ */
+export function javaCommandFor(env: NodeJS.ProcessEnv, deps: Pick<DetectDeps, "platform" | "exists">): string {
+  const p = pathFor(deps.platform);
+  const javaHome = cleanEnvPath(env.JAVA_HOME);
   if (javaHome) {
-    const candidate = path.join(javaHome, "bin", process.platform === "win32" ? "java.exe" : "java");
-    if (existsSync(candidate)) return candidate;
+    const candidate = p.join(javaHome, "bin", deps.platform === "win32" ? "java.exe" : "java");
+    if (deps.exists(candidate)) return candidate;
   }
   return "java";
 }
 
-/** What the JMeter launcher will end up running: JAVA_HOME's java if set, otherwise the one on PATH. */
-export function detectRuntime(env: NodeJS.ProcessEnv = process.env): RuntimeInfo {
-  const command = javaCommand(env);
+/**
+ * Directories that can hold JMeter's jars: lib/ in a zip/tarball install (and Windows package
+ * managers such as Chocolatey or Scoop), libexec/lib/ where Homebrew moves the real install.
+ */
+export function jmeterLibDirs(jmeterHome: string, platform: NodeJS.Platform): string[] {
+  const p = pathFor(platform);
+  return [p.join(jmeterHome, "lib"), p.join(jmeterHome, "libexec", "lib")];
+}
+
+export function detectRuntime(env: NodeJS.ProcessEnv = process.env, deps: DetectDeps = realDeps): RuntimeInfo {
+  const command = javaCommandFor(env, deps);
   let javaMajor: number | null = null;
   try {
-    const result = spawnSync(command, ["-version"], { encoding: "utf-8", timeout: 10_000 });
-    javaMajor = parseJavaMajor(`${result.stderr ?? ""}${result.stdout ?? ""}`);
+    javaMajor = parseJavaMajor(deps.runJavaVersion(command));
   } catch {
     javaMajor = null;
   }
 
   let groovyVersion: string | null = null;
-  if (env.JMETER_HOME) {
-    // A tarball install keeps jars in lib/; Homebrew moves the real install to libexec/.
-    for (const libDir of ["lib", path.join("libexec", "lib")]) {
+  const jmeterHome = cleanEnvPath(env.JMETER_HOME);
+  if (jmeterHome) {
+    for (const libDir of jmeterLibDirs(jmeterHome, deps.platform)) {
       try {
-        groovyVersion = parseGroovyVersion(readdirSync(path.join(env.JMETER_HOME, libDir)));
+        groovyVersion = parseGroovyVersion(deps.readDir(libDir));
       } catch {
         groovyVersion = null;
       }
