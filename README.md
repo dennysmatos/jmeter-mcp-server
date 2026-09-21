@@ -263,6 +263,12 @@ A search that never breaks the SLA reports `breakingPoint: null` with
 `stopReason: "ceiling-reached"` — raise `maxThreads` and go again. One where
 even the first round breaks reports `lastHealthy: null`; lower `startThreads`.
 
+While an execution runs, `get_execution_status` also returns a `progress` block
+computed from the results file so far — samples, error rate, avg/p95 latency,
+overall and recent throughput, and the same per label — so polling it is enough;
+there is no need to tail `stdout.log`. Once the run ends, `get_execution_report`
+gives the full aggregate.
+
 ## Example workflow
 
 ```

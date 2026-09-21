@@ -523,3 +523,54 @@ test(
     }
   },
 );
+
+test("get_execution_status reports live progress from the results file while the run is going", { skip: skip && skipReason }, async () => {
+  const localServer: Server = createServer((_req, res) => {
+    setTimeout(() => res.end("ok"), 40);
+  });
+  await new Promise<void>((resolve) => localServer.listen(0, "127.0.0.1", resolve));
+  const targetPort = (localServer.address() as any).port;
+  try {
+    const { planId, rootNodeId } = await callTool(server.client, "create_test_plan", { name: "Live Progress" });
+    const { nodeId: tg } = await callTool(server.client, "add_thread_group", {
+      planId,
+      parentId: rootNodeId,
+      name: "Load",
+      numThreads: 2,
+      rampTimeSeconds: 1,
+      loops: 1,
+      durationSeconds: 8,
+    });
+    await callTool(server.client, "add_http_sampler", {
+      planId,
+      parentId: tg,
+      name: "Home",
+      method: "GET",
+      protocol: "http",
+      domain: "127.0.0.1",
+      port: targetPort,
+      path: "/",
+    });
+    await callTool(server.client, "add_aggregate_report_listener", { planId, parentId: tg });
+
+    const { executionId } = await callTool(server.client, "execute_test_plan", { planId });
+    let status = await callTool(server.client, "get_execution_status", { executionId });
+    const deadline = Date.now() + 30000;
+    while (status.status === "running" && !status.progress?.samples && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 300));
+      status = await callTool(server.client, "get_execution_status", { executionId });
+    }
+    assert.equal(status.status, "running", "expected to catch the run while it was still going");
+    assert.ok(status.progress.samples > 0, `expected live samples, got ${JSON.stringify(status.progress)}`);
+    assert.equal(status.progress.byLabel[0].label, "Home");
+    assert.equal(typeof status.progress.p95Ms, "number");
+
+    while (status.status === "running") {
+      await new Promise((r) => setTimeout(r, 500));
+      status = await callTool(server.client, "get_execution_status", { executionId });
+    }
+    assert.equal(status.progress, undefined, "a finished run points at get_execution_report instead");
+  } finally {
+    await new Promise<void>((resolve) => localServer.close(() => resolve()));
+  }
+});

@@ -4,6 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { elapsedSeconds, readMeta, startExecution, stopExecution, tailLog } from "../execution/processManager.js";
 import { computeAggregate } from "../report/aggregate.js";
 import { parseJtl } from "../report/jtlParser.js";
+import { readLiveProgress } from "../report/liveProgress.js";
 import { jsonResult } from "./shared.js";
 
 export function registerExecutionTools(server: McpServer): void {
@@ -26,17 +27,22 @@ export function registerExecutionTools(server: McpServer): void {
     {
       description:
         "Check the status of a test run started with execute_test_plan (running/completed/failed), how long it has " +
-        "been running, and the tail of JMeter's console output with JVM startup warnings filtered out. JMeter only " +
-        "prints a progress summary line about every 30 seconds, so the tail can legitimately stay the same between " +
-        "two quick polls; for live numbers call get_execution_report, which reads the results file while the run is " +
-        "still going.",
+        "been running, and - while it runs - a `progress` block computed from the results file so far: samples, " +
+        "error rate, avg/p95 latency, overall and recent (last ~10s) throughput, and the same per label. Poll this " +
+        "tool rather than tailing stdout.log. The logTail is JMeter's console output with JVM startup warnings " +
+        "filtered out; JMeter only prints a summary line there about every 30 seconds, so it can stay the same " +
+        "between quick polls. Once the run ends, call get_execution_report for the full aggregate.",
       inputSchema: {
         executionId: z.string(),
       },
     },
     ({ executionId }) => {
       const meta = readMeta(executionId);
-      return jsonResult({ ...meta, elapsedSeconds: elapsedSeconds(meta), logTail: tailLog(executionId) });
+      const progress =
+        meta.status === "running"
+          ? readLiveProgress(meta.aggregateFilename ?? meta.summaryFilename ?? meta.viewResultsTreeFilename)
+          : undefined;
+      return jsonResult({ ...meta, elapsedSeconds: elapsedSeconds(meta), ...(progress && { progress }), logTail: tailLog(executionId) });
     },
   );
 

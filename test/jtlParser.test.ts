@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseJtl } from "../src/report/jtlParser.js";
 import { computeAggregate } from "../src/report/aggregate.js";
+import { liveProgressFrom, readLiveProgress } from "../src/report/liveProgress.js";
 
 function writeJtl(content: string): string {
   const dir = mkdtempSync(join(tmpdir(), "jtl-test-"));
@@ -72,4 +73,46 @@ test("unescapes doubled quotes inside a quoted field", () => {
   const samples = parseJtl(file);
   assert.equal(samples.length, 1);
   assert.equal(samples[0].label, "Login");
+});
+
+test("skipIncompleteTrailingRow drops a row JMeter was still writing", () => {
+  const file = writeJtl([HEADER, "1000,120,Login,200,OK,true,512,110", "1010,90,Regis"].join("\n"));
+  assert.equal(parseJtl(file).length, 2);
+  const samples = parseJtl(file, { skipIncompleteTrailingRow: true });
+  assert.equal(samples.length, 1);
+  assert.equal(samples[0].label, "Login");
+});
+
+test("liveProgressFrom summarizes a run in flight, overall and per label", () => {
+  const samples = [
+    { timestamp: 0, elapsed: 100, label: "login", responseCode: "200", success: true, bytes: 1, latency: 1 },
+    { timestamp: 5_000, elapsed: 200, label: "signup", responseCode: "200", success: true, bytes: 1, latency: 1 },
+    { timestamp: 20_000, elapsed: 400, label: "signup", responseCode: "500", success: false, bytes: 1, latency: 1 },
+  ];
+  const progress = liveProgressFrom(samples);
+  assert.ok(progress);
+  assert.equal(progress.samples, 3);
+  assert.equal(progress.errors, 1);
+  assert.equal(progress.errorPct, 33.33);
+  assert.equal(progress.runSeconds, 20);
+  // Only the last sample ends inside the final 10s window.
+  assert.equal(progress.recentThroughputPerSec, 0.1);
+  assert.deepEqual(
+    progress.byLabel.map((l) => [l.label, l.samples]),
+    [
+      ["login", 1],
+      ["signup", 2],
+    ],
+  );
+});
+
+test("liveProgressFrom has nothing to say before the first sample", () => {
+  assert.equal(liveProgressFrom([]), null);
+});
+
+test("readLiveProgress explains itself instead of throwing when there is nothing to read", () => {
+  assert.match((readLiveProgress(undefined) as { unavailable: string }).unavailable, /no Aggregate Report/);
+  assert.match((readLiveProgress("/nonexistent/results.jtl") as { unavailable: string }).unavailable, /No samples written yet/);
+  const headerOnly = writeJtl(HEADER + "\n");
+  assert.match((readLiveProgress(headerOnly) as { unavailable: string }).unavailable, /No samples written yet/);
 });

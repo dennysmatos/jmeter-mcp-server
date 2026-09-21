@@ -81,11 +81,22 @@ function parseCsvRows(text: string): string[][] {
   return rows;
 }
 
-export function parseJtl(filePath: string): SampleResult[] {
+export interface ParseJtlOptions {
+  /**
+   * For a file JMeter is still writing: drop a final row cut off mid-write (fewer columns than
+   * the header) instead of turning its missing fields into zeros and NaNs.
+   */
+  skipIncompleteTrailingRow?: boolean;
+}
+
+export function parseJtl(filePath: string, options: ParseJtlOptions = {}): SampleResult[] {
   const raw = readFileSync(filePath, "utf-8");
   const rows = parseCsvRows(raw).filter((r) => !(r.length === 1 && r[0] === ""));
   if (rows.length === 0) return [];
   const header = rows[0];
+  if (options.skipIncompleteTrailingRow && rows.length > 1 && rows[rows.length - 1].length < header.length) {
+    rows.pop();
+  }
   const col = (name: string) => header.indexOf(name);
 
   const idx = {
