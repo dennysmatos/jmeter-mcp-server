@@ -2,6 +2,7 @@ import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { resolveJmeterBin } from "../jmeter.js";
+import { planGroovyWarning } from "../jsr223Compat.js";
 import { findNode } from "../jmx/tree.js";
 import { serializePlan } from "../jmx/serializer.js";
 import type { TestNode } from "../jmx/types.js";
@@ -67,7 +68,7 @@ export function buildSpawnInvocation(
   return { command: quote(bin), args: args.map(quote), shell: true };
 }
 
-export function startExecution(planId: string): { executionId: string; status: ExecutionStatus } {
+export function startExecution(planId: string): { executionId: string; status: ExecutionStatus; warnings?: string[] } {
   const jmeterBin = resolveJmeterBin();
   const plan = readPlan(planId);
   const executionId = newExecutionId();
@@ -127,7 +128,8 @@ export function startExecution(planId: string): { executionId: string; status: E
     registry.delete(executionId);
   });
 
-  return { executionId, status: "running" };
+  const groovyWarning = planGroovyWarning(plan.root);
+  return { executionId, status: "running", ...(groovyWarning && { warnings: [groovyWarning] }) };
 }
 
 /**

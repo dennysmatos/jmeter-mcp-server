@@ -18,6 +18,7 @@ import { serializePlan } from "../jmx/serializer.js";
 import type { TestNode } from "../jmx/types.js";
 import { listPlans, newPlanId, readPlan, writePlan } from "../workspace.js";
 import { jsonResult } from "./shared.js";
+import { groovyWarning } from "../jsr223Compat.js";
 
 function requireNode(root: TestNode, parentId: string): TestNode {
   const node = findNode(root, parentId);
@@ -26,6 +27,13 @@ function requireNode(root: TestNode, parentId: string): TestNode {
   }
   return node;
 }
+
+/** Shown on every JSR223 tool so a client reads it before choosing a script over a built-in function. */
+const JSR223_JAVA_NOTE =
+  " Scripts default to Groovy, which only works when JMeter runs on a compatible Java (17 is the safe choice; the " +
+  "Groovy bundled with JMeter 5.6.x fails on very new Java such as 25+, killing each virtual user on its first " +
+  'script run) - the result carries a "warning" field when this server detects a mismatch. For unique or random ' +
+  "data, prefer the built-in functions ${__UUID}, ${__RandomString} and ${__Random}, which need no script at all.";
 
 export function registerPlanTools(server: McpServer): void {
   server.registerTool(
@@ -518,7 +526,9 @@ export function registerPlanTools(server: McpServer): void {
   server.registerTool(
     "add_jsr223_sampler",
     {
-      description: "Add a JSR223 Sampler under the given parent (usually a Thread Group), running a script as the sample itself.",
+      description:
+        "Add a JSR223 Sampler under the given parent (usually a Thread Group), running a script as the sample itself." +
+        JSR223_JAVA_NOTE,
       inputSchema: {
         planId: z.string(),
         parentId: z.string(),
@@ -534,7 +544,8 @@ export function registerPlanTools(server: McpServer): void {
       const node = createNode("JSR223Sampler", name, { scriptLanguage, script, parameters });
       addChild(plan.root, parentId, node);
       writePlan(plan);
-      return jsonResult({ nodeId: node.id });
+      const warning = scriptLanguage === "groovy" ? groovyWarning() : null;
+      return jsonResult({ nodeId: node.id, ...(warning && { warning }) });
     },
   );
 
@@ -854,7 +865,9 @@ export function registerPlanTools(server: McpServer): void {
   server.registerTool(
     "add_jsr223_preprocessor",
     {
-      description: "Add a JSR223 PreProcessor under an HTTP sampler (or a Thread Group, to apply to every sampler in it), running a script before the sample.",
+      description:
+        "Add a JSR223 PreProcessor under an HTTP sampler (or a Thread Group, to apply to every sampler in it), running a script before the sample." +
+        JSR223_JAVA_NOTE,
       inputSchema: {
         planId: z.string(),
         parentId: z.string(),
@@ -870,14 +883,17 @@ export function registerPlanTools(server: McpServer): void {
       const node = createNode("JSR223PreProcessor", name, { scriptLanguage, script, parameters });
       addChild(plan.root, parentId, node);
       writePlan(plan);
-      return jsonResult({ nodeId: node.id });
+      const warning = scriptLanguage === "groovy" ? groovyWarning() : null;
+      return jsonResult({ nodeId: node.id, ...(warning && { warning }) });
     },
   );
 
   server.registerTool(
     "add_jsr223_postprocessor",
     {
-      description: "Add a JSR223 PostProcessor under an HTTP sampler (or a Thread Group, to apply to every sampler in it), running a script after the sample.",
+      description:
+        "Add a JSR223 PostProcessor under an HTTP sampler (or a Thread Group, to apply to every sampler in it), running a script after the sample." +
+        JSR223_JAVA_NOTE,
       inputSchema: {
         planId: z.string(),
         parentId: z.string(),
@@ -893,7 +909,8 @@ export function registerPlanTools(server: McpServer): void {
       const node = createNode("JSR223PostProcessor", name, { scriptLanguage, script, parameters });
       addChild(plan.root, parentId, node);
       writePlan(plan);
-      return jsonResult({ nodeId: node.id });
+      const warning = scriptLanguage === "groovy" ? groovyWarning() : null;
+      return jsonResult({ nodeId: node.id, ...(warning && { warning }) });
     },
   );
 

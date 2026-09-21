@@ -269,6 +269,18 @@ overall and recent throughput, and the same per label — so polling it is enoug
 there is no need to tail `stdout.log`. Once the run ends, `get_execution_report`
 gives the full aggregate.
 
+### JSR223 scripts need a compatible Java
+
+JSR223 elements default to Groovy, and the Groovy bundled with JMeter 5.6.x
+(3.0.x) fails on very new Java releases: every script run throws, which ends
+that virtual user's iteration and can look like load that never grows. Use Java
+17 (LTS) for JMeter — set `JAVA_HOME` in the MCP server's environment. The
+`add_jsr223_*` tools, `execute_test_plan` and `find_breaking_point` detect the
+Java and Groovy versions in use and return a `warning` / `warnings` entry when
+they don't match, and the tool descriptions steer clients toward the built-in
+`${__UUID}`, `${__RandomString}` and `${__Random}` functions, which need no
+script.
+
 ## Example workflow
 
 ```

@@ -5,6 +5,7 @@ import type { NodeType, TestNode } from "../jmx/types.js";
 import { computeAggregate, type AggregateReport, type LabelStats } from "../report/aggregate.js";
 import { parseJtl, type SampleResult } from "../report/jtlParser.js";
 import { capacitySearchDir, executionsDir, newCapacitySearchId, readPlan, writePlan } from "../workspace.js";
+import { planGroovyWarning } from "../jsr223Compat.js";
 import { hasNodeOfType, readMeta, startExecution, stopExecution, tailLog } from "./processManager.js";
 
 /** Thread group flavours whose numThreads/rampTime the search is allowed to drive. */
@@ -510,6 +511,7 @@ export function startBreakingPointSearch(request: BreakingPointRequest): {
   config: ResolvedConfig;
   sla: SlaThresholds;
   statusFile: string;
+  warnings?: string[];
 } {
   const sla: SlaThresholds = {};
   if (request.p95Ms !== undefined) sla.p95Ms = request.p95Ms;
@@ -580,7 +582,8 @@ export function startBreakingPointSearch(request: BreakingPointRequest): {
 
   void driveSearch(searchId);
 
-  return { searchId, status: "running", config, sla, statusFile: metaPath(searchId) };
+  const groovyWarning = planGroovyWarning(plan.root);
+  return { searchId, status: "running", config, sla, statusFile: metaPath(searchId), ...(groovyWarning && { warnings: [groovyWarning] }) };
 }
 
 async function driveSearch(searchId: string): Promise<void> {
