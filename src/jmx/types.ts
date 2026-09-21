@@ -24,6 +24,7 @@ export type NodeType =
   | "WhileController"
   | "RandomController"
   | "InterleaveController"
+  | "OnceOnlyController"
   | "SetupThreadGroup"
   | "PostThreadGroup"
   | "XPathExtractor"

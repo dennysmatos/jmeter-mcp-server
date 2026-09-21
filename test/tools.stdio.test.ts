@@ -232,6 +232,12 @@ const cases: ToolCase[] = [
     expectType: "InterleaveController",
   },
   {
+    tool: "add_once_only_controller",
+    parent: () => threadGroupId,
+    args: {},
+    expectType: "OnceOnlyController",
+  },
+  {
     tool: "add_setup_thread_group",
     parent: () => rootId,
     args: { numThreads: 1, rampTimeSeconds: 1, loops: 1 },

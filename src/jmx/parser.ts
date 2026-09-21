@@ -395,6 +395,8 @@ function classify(
       return { type: "LoopController", props: parseLoopControllerProps(children) };
     case "IfController":
       return { type: "IfController", props: parseIfControllerProps(children) };
+    case "OnceOnlyController":
+      return { type: "OnceOnlyController", props: {} };
     case "CookieManager":
       return { type: "CookieManager", props: parseCookieManagerProps(children) };
     case "ConfigTestElement":

@@ -96,10 +96,10 @@ export function registerPlanTools(server: McpServer): void {
     "add_http_sampler",
     {
       description:
-        "Add an HTTP Request sampler under the given parent node (usually a Thread Group). Omit protocol/domain/" +
-        "port entirely (don't just leave them out - they have no default) to inherit those fields from an " +
-        "HTTP Request Defaults config element in scope (add_http_request_defaults). Passing an explicit value " +
-        "always overrides the Defaults for that field.",
+        "Add an HTTP Request sampler under the given parent node (usually a Thread Group). To inherit protocol, " +
+        "domain or port from an HTTP Request Defaults config element in scope (add_http_request_defaults), leave " +
+        "that argument out of the call - do not pass an empty string or a placeholder, because those fields have no " +
+        "default of their own. Passing an explicit value always overrides the Defaults for that field.",
       inputSchema: {
         planId: z.string(),
         parentId: z.string(),
@@ -735,6 +735,29 @@ export function registerPlanTools(server: McpServer): void {
       const plan = readPlan(planId);
       requireNode(plan.root, parentId);
       const node = createNode("InterleaveController", name, { ignoreSubControllerBlocks });
+      addChild(plan.root, parentId, node);
+      writePlan(plan);
+      return jsonResult({ nodeId: node.id });
+    },
+  );
+
+  server.registerTool(
+    "add_once_only_controller",
+    {
+      description:
+        "Add a Once Only Controller under the given parent (usually a Thread Group). Its children run only on each " +
+        "thread's first iteration and are skipped on every later one - use it for a login before a looping scenario " +
+        "(or in a Thread Group that loops forever / runs on a scheduler, as find_breaking_point does).",
+      inputSchema: {
+        planId: z.string(),
+        parentId: z.string(),
+        name: z.string().default("Once Only Controller"),
+      },
+    },
+    ({ planId, parentId, name }) => {
+      const plan = readPlan(planId);
+      requireNode(plan.root, parentId);
+      const node = createNode("OnceOnlyController", name, {});
       addChild(plan.root, parentId, node);
       writePlan(plan);
       return jsonResult({ nodeId: node.id });

@@ -254,9 +254,11 @@ ${boolProp("TransactionController.parent", false)}
 
 function renderLoopController(node: TestNode): string {
   const p = node.props as unknown as LoopControllerProps;
-  const continueForever = p.loops === -1;
+  // Always true, as the JMeter GUI writes it for a nested Loop Controller. With false, the controller marks itself
+  // done after its first pass and is skipped on every later iteration of the enclosing thread group - which
+  // silently turns "20 requests per iteration" into "20 requests per user, once" in scheduler/looping runs.
   return `<LoopController guiclass="LoopControlPanel" testclass="LoopController" testname="${esc(node.name)}" enabled="${node.enabled !== false}">
-${boolProp("LoopController.continue_forever", continueForever)}
+${boolProp("LoopController.continue_forever", true)}
 ${intProp("LoopController.loops", p.loops)}
 </LoopController>`;
 }
@@ -385,6 +387,10 @@ function renderRandomController(node: TestNode): string {
   return `<RandomController guiclass="RandomControlGui" testclass="RandomController" testname="${esc(node.name)}" enabled="${node.enabled !== false}">
 ${intProp("InterleaveControl.style", 1)}
 </RandomController>`;
+}
+
+function renderOnceOnlyController(node: TestNode): string {
+  return `<OnceOnlyController guiclass="OnceOnlyControllerGui" testclass="OnceOnlyController" testname="${esc(node.name)}" enabled="${node.enabled !== false}"/>`;
 }
 
 function renderInterleaveController(node: TestNode): string {
@@ -688,6 +694,8 @@ function renderElement(node: TestNode, opts: SerializeOptions): string {
       return renderRandomController(node);
     case "InterleaveController":
       return renderInterleaveController(node);
+    case "OnceOnlyController":
+      return renderOnceOnlyController(node);
     case "XPathExtractor":
       return renderXPathExtractor(node);
     case "JSR223PreProcessor":

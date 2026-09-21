@@ -168,11 +168,11 @@ test("TransactionController", () => {
   assertProp(xml, "boolProp", "TransactionController.includeTimers", "true");
 });
 
-test("LoopController", () => {
+test("LoopController keeps continue_forever=true so it re-runs on every iteration of its thread group", () => {
   const node = createNode("LoopController", "Loop", { loops: 5 });
   const xml = xmlOf(node);
   assertTag(xml, "LoopController", "LoopControlPanel");
-  assertProp(xml, "boolProp", "LoopController.continue_forever", "false");
+  assertProp(xml, "boolProp", "LoopController.continue_forever", "true");
   assertProp(xml, "intProp", "LoopController.loops", "5");
 });
 
@@ -289,6 +289,12 @@ test("RandomController emits the inherited InterleaveControl.style property", ()
   assertTag(xml, "RandomController", "RandomControlGui");
   assertProp(xml, "intProp", "InterleaveControl.style", "1");
   assert.doesNotMatch(xml, /RandomController\.style/);
+});
+
+test("OnceOnlyController", () => {
+  const node = createNode("OnceOnlyController", "Once", {});
+  const xml = xmlOf(node);
+  assertTag(xml, "OnceOnlyController", "OnceOnlyControllerGui");
 });
 
 test("InterleaveController", () => {

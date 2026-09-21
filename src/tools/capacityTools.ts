@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   DEFAULTS,
+  describeSearch,
   readSearchMeta,
   startBreakingPointSearch,
   stopBreakingPointSearch,
@@ -18,7 +19,12 @@ export function registerCapacityTools(server: McpServer): void {
         "between the last healthy level and the first broken one. Returns immediately with a searchId; poll " +
         "get_breaking_point_status for progress and the final breaking point. The thread group is temporarily switched " +
         "to ramp-up + fixed-plateau (scheduler) mode for the search and its original settings are restored when the " +
-        "search ends. Requires an Aggregate Report, Summary Report, or View Results Tree listener in the plan.",
+        "search ends. Requires an Aggregate Report, Summary Report, or View Results Tree listener in the plan. " +
+        "Rounds always run the thread group in scheduler mode with an infinite loop count, so every thread repeats its " +
+        "whole scenario until the plateau ends: a request meant to run once per user (e.g. a login) must sit under a " +
+        "Once Only Controller, and a nested Loop Controller runs its count on every repeat. Each round reports its " +
+        "metrics both overall and per label (byLabel, with each label's share of the samples) - check that the mix " +
+        "matches what the plan intends. The SLA is judged on the overall numbers, not per label.",
       inputSchema: {
         planId: z.string(),
         threadGroupNodeId: z.string().describe("Node id of the thread group whose thread count the search will drive."),
@@ -67,14 +73,19 @@ export function registerCapacityTools(server: McpServer): void {
     "get_breaking_point_status",
     {
       description:
-        "Check a capacity search started with find_breaking_point: status (running/completed/failed/stopped), the " +
-        "rounds run so far with each one's load and metrics, and - once it finishes - the breaking point, the last " +
-        "healthy load, and a plain-language conclusion.",
+        "Check a capacity search started with find_breaking_point: status (running/completed/failed/stopped), " +
+        "progress (rounds completed out of maxIterations, plus the in-flight round's elapsed time and percent " +
+        "complete), the rounds run so far with each one's load and overall + per-label metrics, and - once it " +
+        "finishes - the breaking point, the last healthy load, and a plain-language conclusion. breakingPoint is " +
+        "the lowest load that was tested and broke the SLA, not necessarily the exact edge: read breakingPointRange " +
+        "(healthyUpTo / brokenAt / exact) for the real precision, since levels between the two were never run when " +
+        "toleranceThreads is above 1. There is no completion push - poll this tool. The same data is on disk at " +
+        "files.meta, and each round's raw results are in files.executionsDir/<executionId>/.",
       inputSchema: {
         searchId: z.string(),
       },
     },
-    ({ searchId }) => jsonResult(readSearchMeta(searchId)),
+    ({ searchId }) => jsonResult(describeSearch(readSearchMeta(searchId))),
   );
 
   server.registerTool(

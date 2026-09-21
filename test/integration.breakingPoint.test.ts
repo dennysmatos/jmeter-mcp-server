@@ -214,3 +214,74 @@ test("stop_breaking_point_search halts a live search and restores the plan", { s
   const after = await callTool(server.client, "get_test_plan", { planId });
   assert.deepEqual(after.root.children[0].props, { numThreads: 1, rampTimeSeconds: 1, loops: 1 });
 });
+
+test("a nested Loop Controller keeps running its full count on every repeat of the thread group", { skip: skip && skipReason }, async () => {
+  const { planId, rootNodeId } = await callTool(server.client, "create_test_plan", { name: "Mix" });
+  const { nodeId: threadGroupNodeId } = await callTool(server.client, "add_thread_group", {
+    planId,
+    parentId: rootNodeId,
+    name: "Load",
+    numThreads: 1,
+    rampTimeSeconds: 1,
+    loops: 1,
+  });
+  const http = { method: "GET", protocol: "http", domain: "127.0.0.1", port };
+  await callTool(server.client, "add_http_sampler", { planId, parentId: threadGroupNodeId, name: "login", path: "/login", ...http });
+  const { nodeId: loopId } = await callTool(server.client, "add_loop_controller", { planId, parentId: threadGroupNodeId, name: "signups", loops: 5 });
+  await callTool(server.client, "add_http_sampler", { planId, parentId: loopId, name: "signup", path: "/signup", ...http });
+  await callTool(server.client, "add_aggregate_report_listener", { planId, parentId: threadGroupNodeId });
+
+  const { searchId, statusFile } = await callTool(server.client, "find_breaking_point", {
+    planId,
+    threadGroupNodeId,
+    p95Ms: 500,
+    startThreads: 2,
+    maxThreads: 2,
+    plateauDurationSeconds: 4,
+    cooldownSeconds: 0,
+    maxIterations: 1,
+  });
+  assert.match(statusFile, /meta\.json$/);
+  const result = await awaitSearch(searchId, 90000);
+  assert.equal(result.status, "completed", `search failed: ${result.error}`);
+  assert.ok(result.files.meta.endsWith("meta.json"));
+
+  const byLabel = Object.fromEntries(result.iterations[0].metrics.byLabel.map((l: any) => [l.label, l.samples]));
+  assert.ok(byLabel.login >= 3, `expected the thread group to repeat several times, got ${byLabel.login} logins`);
+  // Before the fix the loop ran once per thread (2 users x 5 = 10 signups) no matter how often the group repeated.
+  assert.ok(
+    Math.abs(byLabel.signup / byLabel.login - 5) < 0.5,
+    `expected ~5 signups per login, got ${byLabel.signup} signups for ${byLabel.login} logins`,
+  );
+});
+
+test("Once Only Controller runs its child once per thread however often the thread group repeats", { skip: skip && skipReason }, async () => {
+  const { planId, rootNodeId } = await callTool(server.client, "create_test_plan", { name: "Once Only" });
+  const { nodeId: threadGroupNodeId } = await callTool(server.client, "add_thread_group", {
+    planId,
+    parentId: rootNodeId,
+    name: "Load",
+    numThreads: 2,
+    rampTimeSeconds: 1,
+    loops: 4,
+  });
+  const http = { method: "GET", protocol: "http", domain: "127.0.0.1", port };
+  const { nodeId: onceId } = await callTool(server.client, "add_once_only_controller", { planId, parentId: threadGroupNodeId });
+  await callTool(server.client, "add_http_sampler", { planId, parentId: onceId, name: "login", path: "/login", ...http });
+  await callTool(server.client, "add_http_sampler", { planId, parentId: threadGroupNodeId, name: "work", path: "/work", ...http });
+  await callTool(server.client, "add_aggregate_report_listener", { planId, parentId: threadGroupNodeId });
+
+  const { executionId } = await callTool(server.client, "execute_test_plan", { planId });
+  let status = await callTool(server.client, "get_execution_status", { executionId });
+  while (status.status === "running") {
+    await new Promise((r) => setTimeout(r, 250));
+    status = await callTool(server.client, "get_execution_status", { executionId });
+  }
+  assert.equal(status.status, "completed");
+  assert.equal(typeof status.elapsedSeconds, "number");
+  assert.ok(!/StatusConsoleListener|X11/.test(status.logTail), "JVM noise should be filtered from logTail");
+
+  const report = await callTool(server.client, "get_execution_report", { executionId });
+  const counts = Object.fromEntries(report.byLabel.map((l: any) => [l.label, l.count]));
+  assert.deepEqual(counts, { login: 2, work: 8 });
+});

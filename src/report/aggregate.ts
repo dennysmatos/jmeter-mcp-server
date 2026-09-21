@@ -25,9 +25,15 @@ function percentile(sorted: number[], p: number): number {
 function statsFor(label: string, samples: SampleResult[]): LabelStats {
   const elapsed = samples.map((s) => s.elapsed).sort((a, b) => a - b);
   const errors = samples.filter((s) => !s.success).length;
-  const timestamps = samples.map((s) => s.timestamp);
-  const endTimes = samples.map((s) => s.timestamp + s.elapsed);
-  const spanMs = Math.max(1, Math.max(...endTimes) - Math.min(...timestamps));
+  // Plain loop, not Math.min/max(...array): spreading hundreds of thousands of samples overflows the call stack.
+  let firstStart = Infinity;
+  let lastEnd = -Infinity;
+  for (const s of samples) {
+    if (s.timestamp < firstStart) firstStart = s.timestamp;
+    const end = s.timestamp + s.elapsed;
+    if (end > lastEnd) lastEnd = end;
+  }
+  const spanMs = Math.max(1, lastEnd - firstStart);
   const spanSec = spanMs / 1000;
   const totalBytes = samples.reduce((sum, s) => sum + s.bytes, 0);
 

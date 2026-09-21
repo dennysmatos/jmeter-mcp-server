@@ -265,3 +265,50 @@ test("runSearchLoop refuses to call an empty round a breaking point", async () =
     /recorded no samples at all/,
   );
 });
+
+test("runSearchLoop reports the breaking point as a range when tolerance leaves levels untested", async () => {
+  const { deps } = recorder({ breaksAbove: 3 });
+  const outcome = await runSearchLoop(config({ startThreads: 2, maxThreads: 8, toleranceThreads: 2 }), { p95Ms: 500 }, deps);
+
+  assert.equal(outcome.lastHealthy, 2);
+  assert.equal(outcome.breakingPoint, 4);
+  assert.deepEqual(outcome.breakingPointRange, { healthyUpTo: 2, brokenAt: 4, exact: false });
+  assert.match(outcome.conclusion, /between 2 and 4 threads \(the 1 level in between was not tested\)/);
+});
+
+test("runSearchLoop marks the breaking point exact once the bounds are adjacent", async () => {
+  const { deps } = recorder({ breaksAbove: 136 });
+  const outcome = await runSearchLoop(config({ toleranceThreads: 1 }), { p95Ms: 500 }, deps);
+
+  assert.equal(outcome.breakingPoint, 137);
+  assert.deepEqual(outcome.breakingPointRange, { healthyUpTo: 136, brokenAt: 137, exact: true });
+  assert.match(outcome.conclusion, /exactly 137 threads/);
+});
+
+test("runSearchLoop has no breaking point range while nothing has broken", async () => {
+  const { deps } = recorder({ breaksAbove: 10000 });
+  const outcome = await runSearchLoop(config({ maxThreads: 200 }), { p95Ms: 500 }, deps);
+  assert.equal(outcome.breakingPointRange, null);
+});
+
+test("runSearchLoop records per-label metrics with each label's share of the round", async () => {
+  const label = (name: string, count: number): LabelStats => ({ ...overallFor(50, 100), label: name, count });
+  const deps: SearchDeps = {
+    async runRound() {
+      return { executionId: "exec_1", overall: overallFor(50, 100), byLabel: [label("login", 400), label("signup", 100)] };
+    },
+    async sleep() {},
+    stopRequested: () => false,
+    onProgress() {},
+  };
+  const outcome = await runSearchLoop(config({ maxIterations: 1 }), { p95Ms: 500 }, deps);
+
+  const byLabel = outcome.iterations[0].metrics?.byLabel;
+  assert.deepEqual(
+    byLabel?.map((l) => [l.label, l.samples, l.sharePct]),
+    [
+      ["login", 400, 80],
+      ["signup", 100, 20],
+    ],
+  );
+});

@@ -130,12 +130,32 @@ export function startExecution(planId: string): { executionId: string; status: E
   return { executionId, status: "running" };
 }
 
+/**
+ * JVM and Log4j chatter that JMeter writes to stdout on every launch (X11 module warnings,
+ * sun.misc.Unsafe deprecations, Log4j plugin scanning). It says nothing about the run and
+ * pushes the useful lines - JMeter's own progress summaries - out of the tail.
+ */
+const LOG_NOISE = [/^WARNING: /, /StatusConsoleListener/, /sun\.misc\.Unsafe/, /\bX11\b/];
+
+export function isLogNoise(line: string): boolean {
+  return LOG_NOISE.some((pattern) => pattern.test(line));
+}
+
 export function tailLog(executionId: string, maxLines = 40): string {
   const meta = readMeta(executionId);
   if (!existsSync(meta.stdoutLogPath)) return "";
   const content = readFileSync(meta.stdoutLogPath, "utf-8").trim();
   if (!content) return "";
-  return content.split(/\r?\n/).slice(-maxLines).join("\n");
+  return content
+    .split(/\r?\n/)
+    .filter((line) => !isLogNoise(line))
+    .slice(-maxLines)
+    .join("\n");
+}
+
+export function elapsedSeconds(meta: Pick<ExecutionMeta, "startTime" | "endTime">): number {
+  const end = meta.endTime ? Date.parse(meta.endTime) : Date.now();
+  return Math.max(0, Math.round((end - Date.parse(meta.startTime)) / 1000));
 }
 
 export function stopExecution(executionId: string): { stopped: boolean; message: string } {

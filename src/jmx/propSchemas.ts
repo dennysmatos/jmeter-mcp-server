@@ -184,6 +184,8 @@ export const propSchemas: Record<NodeType, z.ZodObject<any>> = {
 
   RandomController: z.object({}),
 
+  OnceOnlyController: z.object({}),
+
   InterleaveController: z.object({
     ignoreSubControllerBlocks: z.boolean(),
   }),

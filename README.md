@@ -42,7 +42,7 @@ Claude: [create_test_plan, add_thread_group, add_http_sampler, add_duration_asse
         Ran 300 requests over 30s, 0 failures. p95 latency: 214ms, avg: 187ms, throughput: 10.1 req/s.
 ```
 
-Every step above is a real typed MCP tool call — see [Tools](#tools) for the full set (34 element types across samplers, controllers, timers, extractors, assertions, and listeners, plus editing, inspection, and `.jmx` import/export tools) and [Example workflow](#example-workflow) for the raw call sequence.
+Every step above is a real typed MCP tool call — see [Tools](#tools) for the full set (35 element types across samplers, controllers, timers, extractors, assertions, and listeners, plus editing, inspection, and `.jmx` import/export tools) and [Example workflow](#example-workflow) for the raw call sequence.
 
 ## Quick start
 
@@ -97,6 +97,7 @@ already know where to look:
 | `add_while_controller` | While Controller (repeats children while a condition holds) |
 | `add_random_controller` | Random Controller (runs one random child per pass) |
 | `add_interleave_controller` | Interleave Controller (alternates through children) |
+| `add_once_only_controller` | Once Only Controller (children run only on each thread's first iteration) |
 
 **Config Element:**
 
@@ -210,8 +211,18 @@ find_breaking_point (planId, threadGroupNodeId, maxThreads: 400, p95Ms: 800, err
                                 → { searchId }
 get_breaking_point_status (searchId)   ← poll
                                 → { breakingPoint: 137, lastHealthy: 134,
-                                    stopReason: "converged", iterations: [...] }
+                                    breakingPointRange: { healthyUpTo: 134, brokenAt: 137, exact: false },
+                                    stopReason: "converged", progress: {...}, iterations: [...] }
 ```
+
+`breakingPoint` is the lowest load that was actually *tested* and broke the SLA.
+Because the search stops bisecting at `toleranceThreads`, the levels between
+`lastHealthy` and `breakingPoint` were never run — read `breakingPointRange` for
+the real precision (`exact: true` only when the two are adjacent), and treat the
+edge as "between 134 and 137", not "137". Status also reports `progress` (rounds
+done, and the in-flight round's elapsed time and percent complete) and `files`
+(where `meta.json` and the per-round executions live). There is no completion
+push: poll `get_breaking_point_status`.
 
 A round passes when **every** threshold set (`p95Ms`, `errorPct`) is met by the
 overall `TOTAL` row; at least one threshold is required. Each round puts the
@@ -220,6 +231,14 @@ thread group into scheduler mode — a ramp-up proportional to the thread count
 load — and **only the plateau samples count**, so the ramp-up doesn't drag the
 numbers of a healthy round down. Loop counts are deliberately not used: they
 would make rounds at different thread counts incomparable.
+
+Because a round repeats the thread group's whole scenario until the plateau
+ends, **the request mix per round follows from how the plan is built**: a login
+that should happen once per user belongs under a Once Only Controller
+(`add_once_only_controller`), or it will run on every repeat. Each round reports
+its metrics overall *and* per label (`byLabel`, with each label's share of the
+samples), so a skewed mix is visible right away — the SLA itself is judged on
+the overall numbers.
 
 The search temporarily overwrites `numThreads`, `rampTimeSeconds`,
 `durationSeconds` and `loops` on the thread group you point it at, and restores
@@ -359,7 +378,7 @@ block above rather than relying on it already being "set on your machine".
 | Variable | Required | Purpose |
 |---|---|---|
 | `JMETER_HOME` | Yes | JMeter installation directory (must contain `bin/jmeter`) |
-| `JMETER_MCP_WORKSPACE` | No | Where plans and executions are stored. Defaults to `./jmeter-workspace` relative to wherever the server process starts |
+| `JMETER_MCP_WORKSPACE` | No | Where plans and executions are stored. Defaults to `./jmeter-workspace` relative to wherever the server process starts, so when the server runs inside a project repo, point this outside the repo (or gitignore `jmeter-workspace/`) to keep run artifacts out of `git status` |
 
 ## Workspace layout
 

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { readMeta, startExecution, stopExecution, tailLog } from "../execution/processManager.js";
+import { elapsedSeconds, readMeta, startExecution, stopExecution, tailLog } from "../execution/processManager.js";
 import { computeAggregate } from "../report/aggregate.js";
 import { parseJtl } from "../report/jtlParser.js";
 import { jsonResult } from "./shared.js";
@@ -24,14 +24,19 @@ export function registerExecutionTools(server: McpServer): void {
   server.registerTool(
     "get_execution_status",
     {
-      description: "Check the status of a test run started with execute_test_plan (running/completed/failed), plus the tail of its log.",
+      description:
+        "Check the status of a test run started with execute_test_plan (running/completed/failed), how long it has " +
+        "been running, and the tail of JMeter's console output with JVM startup warnings filtered out. JMeter only " +
+        "prints a progress summary line about every 30 seconds, so the tail can legitimately stay the same between " +
+        "two quick polls; for live numbers call get_execution_report, which reads the results file while the run is " +
+        "still going.",
       inputSchema: {
         executionId: z.string(),
       },
     },
     ({ executionId }) => {
       const meta = readMeta(executionId);
-      return jsonResult({ ...meta, logTail: tailLog(executionId) });
+      return jsonResult({ ...meta, elapsedSeconds: elapsedSeconds(meta), logTail: tailLog(executionId) });
     },
   );
 

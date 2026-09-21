@@ -2,9 +2,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { findNode } from "../jmx/tree.js";
 import type { NodeType, TestNode } from "../jmx/types.js";
-import { computeAggregate, type LabelStats } from "../report/aggregate.js";
+import { computeAggregate, type AggregateReport, type LabelStats } from "../report/aggregate.js";
 import { parseJtl, type SampleResult } from "../report/jtlParser.js";
-import { capacitySearchDir, newCapacitySearchId, readPlan, writePlan } from "../workspace.js";
+import { capacitySearchDir, executionsDir, newCapacitySearchId, readPlan, writePlan } from "../workspace.js";
 import { hasNodeOfType, readMeta, startExecution, stopExecution, tailLog } from "./processManager.js";
 
 /** Thread group flavours whose numThreads/rampTime the search is allowed to drive. */
@@ -41,6 +41,17 @@ export interface RoundLoad {
   durationSeconds: number;
 }
 
+/** One label's slice of a round, so a skewed request mix shows up next to the overall numbers. */
+export interface LabelMetrics {
+  label: string;
+  samples: number;
+  /** Share of the round's samples that this label accounts for. */
+  sharePct: number;
+  errorPct: number;
+  avgMs: number;
+  p95Ms: number;
+}
+
 export interface RoundMetrics {
   samples: number;
   errorPct: number;
@@ -48,6 +59,7 @@ export interface RoundMetrics {
   p95Ms: number;
   p99Ms: number;
   throughputPerSec: number;
+  byLabel: LabelMetrics[];
 }
 
 export interface SearchIteration extends RoundLoad {
@@ -93,14 +105,37 @@ export interface SearchMeta {
   originalProps: Record<string, unknown>;
   propsRestored: boolean;
   currentLoad?: RoundLoad;
+  currentRoundStartTime?: string;
   currentExecutionId?: string;
   iterations: SearchIteration[];
   bounds: SearchBounds;
+  /** Lowest load that was *tested* and broke the SLA. See breakingPointRange for how precise that is. */
   breakingPoint: number | null;
   lastHealthy: number | null;
+  breakingPointRange: BreakingPointRange | null;
   stopReason?: StopReason;
   conclusion?: string;
   error?: string;
+}
+
+/**
+ * Where the true edge lies. The search only tests some loads, so with a tolerance above 1 the
+ * levels between `healthyUpTo` and `brokenAt` were never run: the real breaking point is
+ * somewhere in (healthyUpTo, brokenAt]. `exact` is true only when the two are adjacent.
+ */
+export interface BreakingPointRange {
+  healthyUpTo: number | null;
+  brokenAt: number;
+  exact: boolean;
+}
+
+export function breakingPointRange(bounds: SearchBounds): BreakingPointRange | null {
+  if (bounds.hi === null) return null;
+  return {
+    healthyUpTo: bounds.lo === 0 ? null : bounds.lo,
+    brokenAt: bounds.hi,
+    exact: bounds.lo !== 0 && bounds.hi - bounds.lo === 1,
+  };
 }
 
 /** Thrown when a stop request interrupts a round; converts to status "stopped", not "failed". */
@@ -174,7 +209,7 @@ export function evaluateSla(overall: LabelStats, sla: SlaThresholds): { passed: 
   return { passed: violations.length === 0, violations };
 }
 
-function metricsFrom(overall: LabelStats): RoundMetrics {
+function metricsFrom(overall: LabelStats, byLabel: LabelStats[] = []): RoundMetrics {
   return {
     samples: overall.count,
     errorPct: round(overall.errorPct),
@@ -182,12 +217,21 @@ function metricsFrom(overall: LabelStats): RoundMetrics {
     p95Ms: round(overall.p95Ms),
     p99Ms: round(overall.p99Ms),
     throughputPerSec: round(overall.throughputPerSec),
+    byLabel: byLabel.map((stats) => ({
+      label: stats.label,
+      samples: stats.count,
+      sharePct: round(overall.count === 0 ? 0 : (stats.count / overall.count) * 100),
+      errorPct: round(stats.errorPct),
+      avgMs: round(stats.avgMs),
+      p95Ms: round(stats.p95Ms),
+    })),
   };
 }
 
 export interface RoundResult {
   executionId: string | null;
   overall: LabelStats | null;
+  byLabel?: LabelStats[];
 }
 
 export interface SearchDeps {
@@ -206,6 +250,7 @@ export interface SearchOutcome {
   bounds: SearchBounds;
   breakingPoint: number | null;
   lastHealthy: number | null;
+  breakingPointRange: BreakingPointRange | null;
   stopReason: StopReason;
   conclusion: string;
 }
@@ -229,7 +274,12 @@ function conclude(bounds: SearchBounds, stopReason: StopReason, cfg: ResolvedCon
     stopReason === "max-iterations"
       ? ` Search hit its ${cfg.maxIterations}-iteration limit, so the true edge is somewhere in that ${hi - lo}-thread window.`
       : ` Bounds converged to within ${hi - lo} threads (tolerance ${cfg.toleranceThreads}).`;
-  return `${lo} threads met the SLA; ${hi} threads broke it.${suffix}`;
+  const untested = hi - lo - 1;
+  const edge =
+    untested > 0
+      ? ` The breaking point is between ${lo} and ${hi} threads (the ${untested} level${untested === 1 ? "" : "s"} in between ${untested === 1 ? "was" : "were"} not tested), not exactly ${hi}.`
+      : ` The breaking point is exactly ${hi} threads.`;
+  return `${lo} threads met the SLA; ${hi} threads broke it.${suffix}${edge}`;
 }
 
 /**
@@ -287,7 +337,7 @@ export async function runSearchLoop(cfg: ResolvedConfig, sla: SlaThresholds, dep
       executionId: result.executionId,
       passed,
       violations,
-      metrics: metricsFrom(result.overall),
+      metrics: metricsFrom(result.overall, result.byLabel),
     };
     iterations.push(iteration);
     bounds = passed ? { lo: load, hi: bounds.hi } : { lo: bounds.lo, hi: load };
@@ -312,12 +362,13 @@ export async function runSearchLoop(cfg: ResolvedConfig, sla: SlaThresholds, dep
     bounds,
     breakingPoint: bounds.hi,
     lastHealthy: bounds.lo === 0 ? null : bounds.lo,
+    breakingPointRange: breakingPointRange(bounds),
     stopReason,
     conclusion: conclude(bounds, stopReason, cfg),
   };
 }
 
-function metaPath(searchId: string): string {
+export function metaPath(searchId: string): string {
   return path.join(capacitySearchDir(searchId), "meta.json");
 }
 
@@ -409,13 +460,48 @@ async function waitForExecution(executionId: string, deadlineMs: number, searchI
   }
 }
 
-function readPlateauAggregate(executionId: string, rampTimeSeconds: number): LabelStats | null {
+function readPlateauAggregate(executionId: string, rampTimeSeconds: number): AggregateReport | null {
   const meta = readMeta(executionId);
   const sourceFile = meta.aggregateFilename ?? meta.summaryFilename ?? meta.viewResultsTreeFilename;
   if (!sourceFile || !existsSync(sourceFile)) return null;
   const samples = parseJtl(sourceFile);
   if (samples.length === 0) return null;
-  return computeAggregate(plateauSamples(samples, rampTimeSeconds)).overall;
+  return computeAggregate(plateauSamples(samples, rampTimeSeconds));
+}
+
+export interface SearchProgress {
+  roundsCompleted: number;
+  maxIterations: number;
+  elapsedSeconds: number;
+  /** Present only while a round is in flight. */
+  currentRound?: {
+    iteration: number;
+    numThreads: number;
+    elapsedSeconds: number;
+    plannedSeconds: number;
+    percentComplete: number;
+  };
+}
+
+/** What get_breaking_point_status adds on top of the stored meta: progress and where the files live. */
+export function describeSearch(meta: SearchMeta): SearchMeta & { progress: SearchProgress; files: { meta: string; executionsDir: string } } {
+  const end = meta.endTime ? Date.parse(meta.endTime) : Date.now();
+  const progress: SearchProgress = {
+    roundsCompleted: meta.iterations.length,
+    maxIterations: meta.config.maxIterations,
+    elapsedSeconds: Math.max(0, Math.round((end - Date.parse(meta.startTime)) / 1000)),
+  };
+  if (meta.currentLoad && meta.currentRoundStartTime) {
+    const elapsed = Math.max(0, (Date.now() - Date.parse(meta.currentRoundStartTime)) / 1000);
+    progress.currentRound = {
+      iteration: meta.iterations.length + 1,
+      numThreads: meta.currentLoad.numThreads,
+      elapsedSeconds: Math.round(elapsed),
+      plannedSeconds: meta.currentLoad.durationSeconds,
+      percentComplete: Math.min(100, Math.round((elapsed / meta.currentLoad.durationSeconds) * 100)),
+    };
+  }
+  return { ...meta, progress, files: { meta: metaPath(meta.searchId), executionsDir: executionsDir() } };
 }
 
 export function startBreakingPointSearch(request: BreakingPointRequest): {
@@ -423,6 +509,7 @@ export function startBreakingPointSearch(request: BreakingPointRequest): {
   status: SearchStatus;
   config: ResolvedConfig;
   sla: SlaThresholds;
+  statusFile: string;
 } {
   const sla: SlaThresholds = {};
   if (request.p95Ms !== undefined) sla.p95Ms = request.p95Ms;
@@ -487,12 +574,13 @@ export function startBreakingPointSearch(request: BreakingPointRequest): {
     bounds: { lo: 0, hi: null },
     breakingPoint: null,
     lastHealthy: null,
+    breakingPointRange: null,
   };
   writeSearchMeta(meta);
 
   void driveSearch(searchId);
 
-  return { searchId, status: "running", config, sla };
+  return { searchId, status: "running", config, sla, statusFile: metaPath(searchId) };
 }
 
 async function driveSearch(searchId: string): Promise<void> {
@@ -505,6 +593,7 @@ async function driveSearch(searchId: string): Promise<void> {
     onRoundStart(load) {
       const meta = readSearchMeta(searchId);
       meta.currentLoad = load;
+      meta.currentRoundStartTime = new Date().toISOString();
       delete meta.currentExecutionId;
       writeSearchMeta(meta);
     },
@@ -514,7 +603,9 @@ async function driveSearch(searchId: string): Promise<void> {
       meta.bounds = bounds;
       meta.breakingPoint = bounds.hi;
       meta.lastHealthy = bounds.lo === 0 ? null : bounds.lo;
+      meta.breakingPointRange = breakingPointRange(bounds);
       delete meta.currentLoad;
+      delete meta.currentRoundStartTime;
       delete meta.currentExecutionId;
       writeSearchMeta(meta);
     },
@@ -525,7 +616,8 @@ async function driveSearch(searchId: string): Promise<void> {
       meta.currentExecutionId = executionId;
       writeSearchMeta(meta);
       await waitForExecution(executionId, Date.now() + (load.durationSeconds + ROUND_GRACE_SECONDS) * 1000, searchId);
-      return { executionId, overall: readPlateauAggregate(executionId, load.rampTimeSeconds) };
+      const aggregate = readPlateauAggregate(executionId, load.rampTimeSeconds);
+      return { executionId, overall: aggregate?.overall ?? null, byLabel: aggregate?.byLabel };
     },
   };
 
@@ -536,10 +628,12 @@ async function driveSearch(searchId: string): Promise<void> {
     meta.bounds = outcome.bounds;
     meta.breakingPoint = outcome.breakingPoint;
     meta.lastHealthy = outcome.lastHealthy;
+    meta.breakingPointRange = outcome.breakingPointRange;
     meta.stopReason = outcome.stopReason;
     meta.conclusion = outcome.conclusion;
     meta.endTime = new Date().toISOString();
     delete meta.currentLoad;
+    delete meta.currentRoundStartTime;
     delete meta.currentExecutionId;
     meta.propsRestored = restoreProps(planId, threadGroupNodeId, originalProps);
     writeSearchMeta(meta);
@@ -549,6 +643,7 @@ async function driveSearch(searchId: string): Promise<void> {
     meta.error = (err as Error).message;
     meta.endTime = new Date().toISOString();
     delete meta.currentLoad;
+    delete meta.currentRoundStartTime;
     delete meta.currentExecutionId;
     meta.propsRestored = restoreProps(planId, threadGroupNodeId, originalProps);
     writeSearchMeta(meta);
