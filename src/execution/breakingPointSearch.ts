@@ -419,6 +419,8 @@ function applyLoad(planId: string, nodeId: string, load: RoundLoad): void {
     durationSeconds: load.durationSeconds,
   };
   delete node.props.loops;
+  // A start delay would eat into the round's fixed ramp + plateau window.
+  delete node.props.delaySeconds;
   writePlan(plan);
 }
 

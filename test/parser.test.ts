@@ -94,6 +94,21 @@ test("ThreadGroup (scheduler duration)", () => {
   assert.deepEqual(tg.props, { numThreads: 1, rampTimeSeconds: 1, durationSeconds: 30 });
 });
 
+test("ThreadGroup (start delay without duration keeps loops)", () => {
+  const xml = `<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Users" enabled="true">
+<elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+<intProp name="LoopController.loops">2</intProp>
+</elementProp>
+<stringProp name="ThreadGroup.num_threads">5</stringProp>
+<stringProp name="ThreadGroup.ramp_time">1</stringProp>
+<boolProp name="ThreadGroup.scheduler">true</boolProp>
+<stringProp name="ThreadGroup.duration"></stringProp>
+<stringProp name="ThreadGroup.delay">5</stringProp>
+</ThreadGroup>`;
+  const { root } = parseJmx(wrap(xml));
+  assert.deepEqual(root.children[0].props, { numThreads: 5, rampTimeSeconds: 1, loops: 2, delaySeconds: 5 });
+});
+
 test("SetupThreadGroup / PostThreadGroup reuse ThreadGroup parsing under their own tags", () => {
   const setup = `<SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="setUp" enabled="true">
 <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">

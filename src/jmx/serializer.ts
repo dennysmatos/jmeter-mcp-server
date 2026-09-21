@@ -89,19 +89,21 @@ ${stringProp("TestPlan.user_define_classpath", "")}
 
 function renderThreadGroupVariant(node: TestNode, tag: string, guiclass: string): string {
   const p = node.props as unknown as ThreadGroupProps;
-  const scheduler = p.durationSeconds !== undefined;
-  const loops = p.loops ?? (scheduler ? 1 : 1);
+  const hasDuration = p.durationSeconds !== undefined;
+  // JMeter only honours ThreadGroup.delay when the scheduler is on, so a start delay alone also enables it.
+  const scheduler = hasDuration || p.delaySeconds !== undefined;
+  const loops = p.loops ?? 1;
   return `<${tag} guiclass="${guiclass}" testclass="${tag}" testname="${esc(node.name)}" enabled="${node.enabled !== false}">
 ${stringProp("ThreadGroup.on_sample_error", "continue")}
 <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
 ${boolProp("LoopController.continue_forever", false)}
-${intProp("LoopController.loops", scheduler ? -1 : loops)}
+${intProp("LoopController.loops", hasDuration ? -1 : loops)}
 </elementProp>
 ${stringProp("ThreadGroup.num_threads", p.numThreads)}
 ${stringProp("ThreadGroup.ramp_time", p.rampTimeSeconds)}
 ${boolProp("ThreadGroup.scheduler", scheduler)}
-${stringProp("ThreadGroup.duration", scheduler ? p.durationSeconds : "")}
-${stringProp("ThreadGroup.delay", "")}
+${stringProp("ThreadGroup.duration", hasDuration ? p.durationSeconds : "")}
+${stringProp("ThreadGroup.delay", p.delaySeconds ?? "")}
 ${boolProp("ThreadGroup.same_user_on_next_iteration", true)}
 </${tag}>`;
 }

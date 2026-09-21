@@ -15,18 +15,21 @@ export const propSchemas: Record<NodeType, z.ZodObject<any>> = {
     rampTimeSeconds: z.number().nonnegative(),
     loops: z.number().int().optional(),
     durationSeconds: z.number().positive().optional(),
+    delaySeconds: z.number().positive().optional(),
   }),
   SetupThreadGroup: z.object({
     numThreads: z.number().int().positive(),
     rampTimeSeconds: z.number().nonnegative(),
     loops: z.number().int().optional(),
     durationSeconds: z.number().positive().optional(),
+    delaySeconds: z.number().positive().optional(),
   }),
   PostThreadGroup: z.object({
     numThreads: z.number().int().positive(),
     rampTimeSeconds: z.number().nonnegative(),
     loops: z.number().int().optional(),
     durationSeconds: z.number().positive().optional(),
+    delaySeconds: z.number().positive().optional(),
   }),
 
   HTTPSamplerProxy: z.object({

@@ -8,6 +8,7 @@ export interface ThreadGroupProps {
   rampTimeSeconds: number;
   loops?: number;
   durationSeconds?: number;
+  delaySeconds?: number;
 }
 
 export interface HttpSamplerProps {

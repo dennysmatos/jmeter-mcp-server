@@ -73,7 +73,7 @@ already know where to look:
 
 | Tool | Adds |
 |---|---|
-| `add_thread_group` | Thread Group (virtual users) |
+| `add_thread_group` | Thread Group (virtual users); optional `durationSeconds` (scheduler) and `delaySeconds` (start delay, for staging groups) |
 | `add_setup_thread_group` | setUp Thread Group (runs once before all Thread Groups) |
 | `add_teardown_thread_group` | tearDown Thread Group (runs once after all Thread Groups) |
 

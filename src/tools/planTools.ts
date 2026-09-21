@@ -88,12 +88,20 @@ export function registerPlanTools(server: McpServer): void {
           .positive()
           .describe("If set, run on a scheduler for this many seconds instead of a fixed loop count")
           .optional(),
+        delaySeconds: z
+          .number()
+          .positive()
+          .describe(
+            "Startup delay: seconds to wait before this thread group starts (enables the scheduler). Use it to stage " +
+              "thread groups, e.g. a second group that begins 5s after the first.",
+          )
+          .optional(),
       },
     },
-    ({ planId, parentId, name, numThreads, rampTimeSeconds, loops, durationSeconds }) => {
+    ({ planId, parentId, name, numThreads, rampTimeSeconds, loops, durationSeconds, delaySeconds }) => {
       const plan = readPlan(planId);
       requireNode(plan.root, parentId);
-      const node = createNode("ThreadGroup", name, { numThreads, rampTimeSeconds, loops, durationSeconds });
+      const node = createNode("ThreadGroup", name, { numThreads, rampTimeSeconds, loops, durationSeconds, delaySeconds });
       addChild(plan.root, parentId, node);
       writePlan(plan);
       return jsonResult({ nodeId: node.id });
@@ -793,12 +801,20 @@ export function registerPlanTools(server: McpServer): void {
           .positive()
           .describe("If set, run on a scheduler for this many seconds instead of a fixed loop count")
           .optional(),
+        delaySeconds: z
+          .number()
+          .positive()
+          .describe(
+            "Startup delay: seconds to wait before this thread group starts (enables the scheduler). Use it to stage " +
+              "thread groups, e.g. a second group that begins 5s after the first.",
+          )
+          .optional(),
       },
     },
-    ({ planId, parentId, name, numThreads, rampTimeSeconds, loops, durationSeconds }) => {
+    ({ planId, parentId, name, numThreads, rampTimeSeconds, loops, durationSeconds, delaySeconds }) => {
       const plan = readPlan(planId);
       requireNode(plan.root, parentId);
-      const node = createNode("SetupThreadGroup", name, { numThreads, rampTimeSeconds, loops, durationSeconds });
+      const node = createNode("SetupThreadGroup", name, { numThreads, rampTimeSeconds, loops, durationSeconds, delaySeconds });
       addChild(plan.root, parentId, node);
       writePlan(plan);
       return jsonResult({ nodeId: node.id });
@@ -823,12 +839,20 @@ export function registerPlanTools(server: McpServer): void {
           .positive()
           .describe("If set, run on a scheduler for this many seconds instead of a fixed loop count")
           .optional(),
+        delaySeconds: z
+          .number()
+          .positive()
+          .describe(
+            "Startup delay: seconds to wait before this thread group starts (enables the scheduler). Use it to stage " +
+              "thread groups, e.g. a second group that begins 5s after the first.",
+          )
+          .optional(),
       },
     },
-    ({ planId, parentId, name, numThreads, rampTimeSeconds, loops, durationSeconds }) => {
+    ({ planId, parentId, name, numThreads, rampTimeSeconds, loops, durationSeconds, delaySeconds }) => {
       const plan = readPlan(planId);
       requireNode(plan.root, parentId);
-      const node = createNode("PostThreadGroup", name, { numThreads, rampTimeSeconds, loops, durationSeconds });
+      const node = createNode("PostThreadGroup", name, { numThreads, rampTimeSeconds, loops, durationSeconds, delaySeconds });
       addChild(plan.root, parentId, node);
       writePlan(plan);
       return jsonResult({ nodeId: node.id });

@@ -42,6 +42,15 @@ test("ThreadGroup with scheduler duration uses infinite loops", () => {
   assertProp(xml, "stringProp", "ThreadGroup.duration", "30");
 });
 
+test("ThreadGroup with a start delay enables the scheduler and writes ThreadGroup.delay", () => {
+  const node = createNode("ThreadGroup", "Stage 2", { numThreads: 5, rampTimeSeconds: 1, loops: 2, delaySeconds: 5 });
+  const xml = xmlOf(node);
+  assertProp(xml, "boolProp", "ThreadGroup.scheduler", "true");
+  assertProp(xml, "stringProp", "ThreadGroup.delay", "5");
+  assertProp(xml, "stringProp", "ThreadGroup.duration", "");
+  assertProp(xml, "intProp", "LoopController.loops", "2");
+});
+
 test("SetupThreadGroup reuses ThreadGroup properties under its own tag", () => {
   const node = createNode("SetupThreadGroup", "setUp", { numThreads: 1, rampTimeSeconds: 1, loops: 1 });
   const xml = xmlOf(node);

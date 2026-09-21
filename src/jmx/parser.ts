@@ -229,13 +229,13 @@ function parseThreadGroupProps(children: XmlNode[]): ThreadGroupProps {
   const numThreads = intOrDefault(stringPropVal(children, "ThreadGroup.num_threads", "1"), 1);
   const rampTimeSeconds = intOrDefault(stringPropVal(children, "ThreadGroup.ramp_time", "0"), 0);
   const scheduler = boolPropVal(children, "ThreadGroup.scheduler", false);
-  if (scheduler) {
-    const durationSeconds = intOrDefault(stringPropVal(children, "ThreadGroup.duration", "0"), 0);
-    return { numThreads, rampTimeSeconds, durationSeconds };
-  }
+  const durationSeconds = scheduler ? intOrDefault(stringPropVal(children, "ThreadGroup.duration", "0"), 0) : 0;
+  const delaySeconds = scheduler ? intOrDefault(stringPropVal(children, "ThreadGroup.delay", "0"), 0) : 0;
+  const delay = delaySeconds > 0 ? { delaySeconds } : {};
+  if (durationSeconds > 0) return { numThreads, rampTimeSeconds, durationSeconds, ...delay };
   const mainController = elementPropChildren(children, "ThreadGroup.main_controller");
   const loops = intOrStringPropVal(mainController, "LoopController.loops", 1);
-  return { numThreads, rampTimeSeconds, loops };
+  return { numThreads, rampTimeSeconds, loops, ...delay };
 }
 
 function intOrDefault(value: string, fallback: number): number {
