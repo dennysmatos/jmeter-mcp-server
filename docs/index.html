@@ -603,7 +603,7 @@
           <span data-lang="en">View on GitHub</span><span data-lang="pt">Ver no GitHub</span>
         </a>
         <a class="btn ghost" href="#tools">
-          <span data-lang="en">Browse the 55 tools</span><span data-lang="pt">Ver as 55 ferramentas</span>
+          <span data-lang="en">Browse the 56 tools</span><span data-lang="pt">Ver as 56 ferramentas</span>
         </a>
         <a class="btn ghost" href="#prompts">
           <span data-lang="en">See example prompts</span><span data-lang="pt">Ver exemplos de prompt</span>
@@ -1110,8 +1110,8 @@
       <h2 data-lang="pt">Todas as ferramentas</h2>
 
       <div class="tool-count">
-        <span data-lang="en"><b>55</b> typed MCP tools</span>
-        <span data-lang="pt"><b>55</b> ferramentas MCP tipadas</span>
+        <span data-lang="en"><b>56</b> typed MCP tools</span>
+        <span data-lang="pt"><b>56</b> ferramentas MCP tipadas</span>
       </div>
       <p class="lead-p" data-lang="en">
         Grouped the same way JMeter's own right-click <strong>Add</strong> menu groups elements — if you
@@ -1291,8 +1291,8 @@
       <div class="eyebrow" data-lang="pt">Na prática</div>
       <h2 data-lang="en">Example prompts</h2>
       <h2 data-lang="pt">Exemplos de prompt</h2>
-      <p class="lead-p" data-lang="en">Five real shapes of request, from a one-liner to a multi-MCP workflow that captures a live browser session.</p>
-      <p class="lead-p" data-lang="pt">Cinco formatos reais de pedido, de uma linha até um fluxo com múltiplos MCPs que captura uma sessão real do navegador.</p>
+      <p class="lead-p" data-lang="en">Six real shapes of request, from a one-liner to a multi-MCP workflow that captures a live browser session.</p>
+      <p class="lead-p" data-lang="pt">Seis formatos reais de pedido, de uma linha até um fluxo com múltiplos MCPs que captura uma sessão real do navegador.</p>
 
       <!-- 1 simple -->
       <div class="prompt-card">
@@ -1359,10 +1359,26 @@
         </div>
       </div>
 
-      <!-- 5 browser/session -->
+      <!-- 5 breaking point -->
       <div class="prompt-card">
         <div class="ptitle">
           <span class="n">05</span>
+          <h4 data-lang="en">Finding the breaking point</h4>
+          <h4 data-lang="pt">Encontrando o ponto de ruptura</h4>
+        </div>
+        <div class="body">
+          <div class="say" data-lang="en">"Find the breaking point for POST /checkout: start at 10 concurrent users and search upward until p95 latency goes over 800ms or the error rate passes 1%. Run each round for 2 minutes and let me know the exact concurrency where it starts failing."</div>
+          <div class="say" data-lang="pt">"Encontre o ponto de ruptura de POST /checkout: comece com 10 usuários simultâneos e busque para cima até o p95 passar de 800ms ou a taxa de erro passar de 1%. Rode cada rodada por 2 minutos e me diga a concorrência exata onde começa a falhar."</div>
+          <div class="flow"><b>create_test_plan → add_thread_group → add_http_sampler → find_breaking_point → get_breaking_point_status (polled) → get_execution_report</b></div>
+          <p class="note" data-lang="en"><code>find_breaking_point</code> drives the search itself — it re-runs the plan at increasing concurrency, checking each round's latency and error rate against your SLA, and converges on a <code>breakingPointRange</code> instead of you guessing thread counts by hand. <code>stop_breaking_point_search</code> cancels a run in progress.</p>
+          <p class="note" data-lang="pt"><code>find_breaking_point</code> conduz a busca sozinho — ele roda o plano de novo em concorrências crescentes, comparando latência e taxa de erro de cada rodada com a SLA, e converge para um <code>breakingPointRange</code> em vez de você adivinhar o número de threads na mão. <code>stop_breaking_point_search</code> cancela uma busca em andamento.</p>
+        </div>
+      </div>
+
+      <!-- 6 browser/session -->
+      <div class="prompt-card">
+        <div class="ptitle">
+          <span class="n">06</span>
           <h4 data-lang="en">Login &amp; web session, via Claude's browser plugin</h4>
           <h4 data-lang="pt">Login &amp; sessão web, via plugin de navegador do Claude</h4>
         </div>
@@ -1461,12 +1477,12 @@
       <h2 data-lang="en">What's deliberately not covered yet</h2>
       <h2 data-lang="pt">O que ainda falta cobrir, de propósito</h2>
       <p class="lead-p" data-lang="en">
-        JMeter is a huge tool. This server targets the 55-tool core of real, everyday HTTP-first load
+        JMeter is a huge tool. This server targets the 56-tool core of real, everyday HTTP-first load
         testing — samplers, controllers, config, timers, extractors, assertions, and reporting listeners
         that get used constantly. Plenty of JMeter is intentionally left out for now.
       </p>
       <p class="lead-p" data-lang="pt">
-        O JMeter é uma ferramenta enorme. Este servidor cobre o núcleo de 55 ferramentas do teste de carga
+        O JMeter é uma ferramenta enorme. Este servidor cobre o núcleo de 56 ferramentas do teste de carga
         real do dia a dia, focado em HTTP — samplers, controllers, config, timers, extractors, assertions
         e listeners de relatório que são usados o tempo todo. Boa parte do JMeter fica de fora de
         propósito, por enquanto.
@@ -1616,8 +1632,8 @@
           <tbody>
             <tr class="this-row">
               <td class="tool-name"><code>jmeter-mcp-server</code><br><span style="color:var(--text-faint);font-size:0.78rem;" data-lang="en">this project</span><span style="color:var(--text-faint);font-size:0.78rem;" data-lang="pt">este projeto</span></td>
-              <td data-lang="en">JSON tree, 34 element types, authored and edited by node id</td>
-              <td data-lang="pt">Árvore JSON, 34 tipos de elemento, criados e editados por id de nó</td>
+              <td data-lang="en">JSON tree, 38 element types, authored and edited by node id</td>
+              <td data-lang="pt">Árvore JSON, 38 tipos de elemento, criados e editados por id de nó</td>
               <td class="mark-yes">✓</td>
               <td class="mark-yes">✓</td>
               <td class="mark-yes">✓</td>
